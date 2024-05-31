@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 from datetime import datetime, timedelta
 import random
@@ -11,14 +12,18 @@ start_date = datetime(2024, 5, 13, 16, 0, 0)
 end_date = datetime(2024, 5, 13, 19, 2, 37)
 
 
-def generate_sample(traffic_type):
-    frame_time = random_date(start_date, end_date).strftime('%Y-%m-%dT%H:%M:%S.%f%z')
+def generate_sample(traffic_type, previous_log_timestamp):
     if traffic_type == "Normal":
-        return [generate_normal_log(frame_time)]
+        td = random.randint(5, 20)
+        frame_time = previous_log_timestamp + timedelta(milliseconds=td)
+        return [generate_normal_log(frame_time.strftime('%Y-%m-%dT%H:%M:%S.%f%z'))]
     elif traffic_type == "DDoS_TCP":
-        return [generate_ddos_log(frame_time)]
+        frame_time = previous_log_timestamp + timedelta(milliseconds=1) if random.randint(1, 10) == 1 else previous_log_timestamp
+        return [generate_ddos_log(frame_time.strftime('%Y-%m-%dT%H:%M:%S.%f%z'))]
     elif traffic_type == "Port_Scanning":
-        return generate_port_scan_log_pair(frame_time)
+        td = random.randint(1, 5)
+        frame_time = previous_log_timestamp + timedelta(milliseconds=td)
+        return generate_port_scan_log_pair(frame_time.strftime('%Y-%m-%dT%H:%M:%S.%f%z'))
     else:
         raise ValueError("Invalid traffic type")
 
@@ -75,8 +80,11 @@ def generate_normal_log(frame_time):
 def generate_random_data(num_samples, traffic_type):
     data = []
     num_samples = num_samples if traffic_type != "Port_Scanning" else int(num_samples/2)
-    for _ in range(num_samples):
-        data.extend(generate_sample(traffic_type))
+    previous_timestamp = datetime.now().astimezone()
+    for i in range(num_samples):
+        sample = generate_sample(traffic_type, previous_timestamp)
+        data.extend(sample)
+        previous_timestamp = datetime.strptime(data[-1][0], '%Y-%m-%dT%H:%M:%S.%f%z')
 
     columns = ['frame-time', 'ip-src_host', 'ip-dst_host', 'tcp-connection-syn', 'tcp-connection-synack', 'tcp-dstport',
                'tcp-len', 'tcp-seq', 'tcp-srcport', 'Attack_type', 'tcp-flags_index']
@@ -88,6 +96,10 @@ traffic_types = {
     "port-scanning": "Port_Scanning",
     "ddos-tcp-syn-flood": "DDoS_TCP"
 }
+outdir = './generated_data'
+if not os.path.exists(outdir):
+    os.mkdir(outdir)
 for filename, traffic_type in traffic_types.items():
     validation_data = generate_random_data(10000, traffic_type)
-    validation_data.to_csv(f'generated_data/{filename}-preprocessed.csv', index=False)
+    print(f'Saving data to file: {outdir}/{filename}-preprocessed.csv')
+    validation_data.to_csv(f'{outdir}/{filename}-preprocessed.csv', index=False)
